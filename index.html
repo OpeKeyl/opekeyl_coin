@@ -1,12 +1,79 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Koin Opekeyl</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Opekeyl Token 🚀</title>
+  <script src="https://unpkg.com/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to right, #141E30, #243B55);
+      color: #fff;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    header {
+      padding: 60px 20px;
+    }
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+    .btn {
+      display: inline-block;
+      margin: 15px;
+      padding: 12px 25px;
+      border-radius: 30px;
+      background: #ff9800;
+      color: #fff;
+      text-decoration: none;
+      font-weight: bold;
+      transition: 0.3s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn:hover {
+      background: #e68900;
+    }
+    #wallet-address {
+      margin-top: 20px;
+      font-size: 1.1em;
+      color: #00ffcc;
+    }
+  </style>
 </head>
 <body>
-  <h1>Selamat datang di Koin Opekeyl 🚀</h1>
-  <p>Website resmi percobaan koin Opekeyl di GitHub Pages.</p>
+  <header>
+    <h1>🚀 Opekeyl Token</h1>
+    <p>Token resmi komunitas Opekeyl di jaringan Solana</p>
+    <button id="connectBtn" class="btn">Connect Wallet</button>
+    <div id="wallet-address"></div>
+    <br />
+    <a href="https://solscan.io/token/DxysuJs6knjegGpC1PmVvSzWREptbBbsXxwdHsJrJXQR" target="_blank" class="btn">Lihat di Solscan</a>
+  </header>
+
+  <script>
+    const connectBtn = document.getElementById("connectBtn");
+    const walletAddress = document.getElementById("wallet-address");
+
+    async function connectWallet() {
+      if (window.solana && window.solana.isPhantom) {
+        try {
+          const resp = await window.solana.connect();
+          const pubKey = resp.publicKey.toString();
+          walletAddress.innerText = "✅ Wallet terhubung: " + pubKey;
+        } catch (err) {
+          console.error("Wallet connect error:", err);
+          walletAddress.innerText = "❌ Gagal terhubung ke wallet";
+        }
+      } else {
+        alert("Phantom Wallet belum terpasang! Silakan install dari https://phantom.app/");
+      }
+    }
+
+    connectBtn.addEventListener("click", connectWallet);
+  </script>
 </body>
 </html>
