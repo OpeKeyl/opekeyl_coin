@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Opekeyl Token 🚀</title>
   <script src="https://unpkg.com/@solana/web3.js@1.95.2/lib/index.iife.min.js"></script>
+  <script src="https://unpkg.com/@solana/spl-token@0.3.8/lib/index.iife.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -15,7 +16,7 @@
       text-align: center;
     }
     header {
-      padding: 60px 20px;
+      padding: 40px 20px;
     }
     h1 {
       font-size: 2.5em;
@@ -23,24 +24,38 @@
     }
     .btn {
       display: inline-block;
-      margin: 15px;
+      margin: 10px;
       padding: 12px 25px;
       border-radius: 30px;
       background: #ff9800;
       color: #fff;
-      text-decoration: none;
       font-weight: bold;
-      transition: 0.3s;
       cursor: pointer;
       border: none;
+      transition: 0.3s;
     }
     .btn:hover {
       background: #e68900;
     }
-    #wallet-address {
-      margin-top: 20px;
+    #wallet-address, #balance {
+      margin-top: 15px;
       font-size: 1.1em;
       color: #00ffcc;
+    }
+    .transfer-box {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 15px;
+      display: inline-block;
+    }
+    input {
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      margin: 8px;
+      width: 250px;
+      text-align: center;
     }
   </style>
 </head>
@@ -50,20 +65,39 @@
     <p>Token resmi komunitas Opekeyl di jaringan Solana</p>
     <button id="connectBtn" class="btn">Connect Wallet</button>
     <div id="wallet-address"></div>
+    <div id="balance"></div>
     <br />
     <a href="https://solscan.io/token/DxysuJs6knjegGpC1PmVvSzWREptbBbsXxwdHsJrJXQR" target="_blank" class="btn">Lihat di Solscan</a>
+
+    <div class="transfer-box" id="transferBox" style="display:none;">
+      <h2>💸 Transfer Opekeyl</h2>
+      <input type="text" id="recipient" placeholder="Alamat wallet tujuan" /><br>
+      <input type="number" id="amount" placeholder="Jumlah token" /><br>
+      <button id="transferBtn" class="btn">Kirim</button>
+      <div id="transferStatus"></div>
+    </div>
   </header>
 
   <script>
     const connectBtn = document.getElementById("connectBtn");
     const walletAddress = document.getElementById("wallet-address");
+    const balanceDiv = document.getElementById("balance");
+    const transferBox = document.getElementById("transferBox");
+    const transferBtn = document.getElementById("transferBtn");
+    const transferStatus = document.getElementById("transferStatus");
+
+    const TOKEN_MINT = new solanaWeb3.PublicKey("DxysuJs6knjegGpC1PmVvSzWREptbBbsXxwdHsJrJXQR");
+    const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+    let currentWallet = null;
 
     async function connectWallet() {
       if (window.solana && window.solana.isPhantom) {
         try {
           const resp = await window.solana.connect();
-          const pubKey = resp.publicKey.toString();
-          walletAddress.innerText = "✅ Wallet terhubung: " + pubKey;
+          currentWallet = resp.publicKey;
+          walletAddress.innerText = "✅ Wallet terhubung: " + currentWallet.toString();
+          transferBox.style.display = "block";
+          await checkBalance(currentWallet);
         } catch (err) {
           console.error("Wallet connect error:", err);
           walletAddress.innerText = "❌ Gagal terhubung ke wallet";
@@ -73,7 +107,82 @@
       }
     }
 
+    async function checkBalance(ownerPublicKey) {
+      try {
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(ownerPublicKey, {
+          mint: TOKEN_MINT
+        });
+
+        if (tokenAccounts.value.length > 0) {
+          const amount = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+          balanceDiv.innerText = "💰 Saldo Opekeyl: " + amount;
+        } else {
+          balanceDiv.innerText = "💰 Saldo Opekeyl: 0";
+        }
+      } catch (err) {
+        console.error("Error cek saldo:", err);
+        balanceDiv.innerText = "❌ Gagal cek saldo token";
+      }
+    }
+
+    async function transferToken() {
+      const recipientAddress = document.getElementById("recipient").value;
+      const amount = parseFloat(document.getElementById("amount").value);
+      if (!recipientAddress || !amount) {
+        alert("Isi alamat tujuan dan jumlah!");
+        return;
+      }
+
+      try {
+        transferStatus.innerText = "⏳ Mengirim...";
+        const recipientPubKey = new solanaWeb3.PublicKey(recipientAddress);
+
+        // ambil token account pengirim
+        const senderTokenAccounts = await connection.getParsedTokenAccountsByOwner(currentWallet, { mint: TOKEN_MINT });
+        if (senderTokenAccounts.value.length === 0) {
+          throw new Error("Kamu tidak punya token Opekeyl di wallet ini");
+        }
+        const senderTokenAccount = senderTokenAccounts.value[0].pubkey;
+
+        // ambil/cek token account penerima
+        const recipientTokenAccounts = await connection.getParsedTokenAccountsByOwner(recipientPubKey, { mint: TOKEN_MINT });
+        let recipientTokenAccount;
+        if (recipientTokenAccounts.value.length > 0) {
+          recipientTokenAccount = recipientTokenAccounts.value[0].pubkey;
+        } else {
+          throw new Error("Wallet penerima belum punya akun token Opekeyl");
+        }
+
+        // buat instruksi transfer SPL
+        const transaction = new solanaWeb3.Transaction().add(
+          splToken.Token.createTransferInstruction(
+            splToken.TOKEN_PROGRAM_ID,
+            senderTokenAccount,
+            recipientTokenAccount,
+            currentWallet,
+            [],
+            amount * 10 ** 9 // asumsi 9 desimal
+          )
+        );
+
+        transaction.feePayer = currentWallet;
+        let { blockhash } = await connection.getRecentBlockhash();
+        transaction.recentBlockhash = blockhash;
+
+        const signed = await window.solana.signTransaction(transaction);
+        const txid = await connection.sendRawTransaction(signed.serialize());
+        await connection.confirmTransaction(txid);
+
+        transferStatus.innerHTML = "✅ Transfer sukses! TX: <a href='https://solscan.io/tx/" + txid + "' target='_blank'>" + txid + "</a>";
+        await checkBalance(currentWallet);
+      } catch (err) {
+        console.error("Transfer error:", err);
+        transferStatus.innerText = "❌ Gagal kirim: " + err.message;
+      }
+    }
+
     connectBtn.addEventListener("click", connectWallet);
+    transferBtn.addEventListener("click", transferToken);
   </script>
 </body>
 </html>
